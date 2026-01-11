@@ -2,9 +2,172 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { send, setDebug, setSession, getSession } from './client.js';
 import type { Response } from './types.js';
+
+// ============================================================================
+// System Dependencies Installation
+// ============================================================================
+
+// Common dependencies needed for Playwright browsers on Linux
+const LINUX_DEPS = {
+  // Shared libraries for Chromium/Firefox/WebKit
+  apt: [
+    'libxcb-shm0',
+    'libx11-xcb1',
+    'libx11-6',
+    'libxcb1',
+    'libxext6',
+    'libxrandr2',
+    'libxcomposite1',
+    'libxcursor1',
+    'libxdamage1',
+    'libxfixes3',
+    'libxi6',
+    'libgtk-3-0',
+    'libpangocairo-1.0-0',
+    'libpango-1.0-0',
+    'libatk1.0-0',
+    'libcairo-gobject2',
+    'libcairo2',
+    'libgdk-pixbuf-2.0-0',
+    'libxrender1',
+    'libasound2',
+    'libfreetype6',
+    'libfontconfig1',
+    'libdbus-1-3',
+    'libnss3',
+    'libnspr4',
+    'libatk-bridge2.0-0',
+    'libdrm2',
+    'libxkbcommon0',
+    'libatspi2.0-0',
+    'libcups2',
+    'libxshmfence1',
+    'libgbm1',
+  ],
+  dnf: [
+    'libxcb',
+    'libX11-xcb',
+    'libX11',
+    'libXext',
+    'libXrandr',
+    'libXcomposite',
+    'libXcursor',
+    'libXdamage',
+    'libXfixes',
+    'libXi',
+    'gtk3',
+    'pango',
+    'atk',
+    'cairo-gobject',
+    'cairo',
+    'gdk-pixbuf2',
+    'libXrender',
+    'alsa-lib',
+    'freetype',
+    'fontconfig',
+    'dbus-libs',
+    'nss',
+    'nspr',
+    'at-spi2-atk',
+    'libdrm',
+    'libxkbcommon',
+    'at-spi2-core',
+    'cups-libs',
+    'libxshmfence',
+    'mesa-libgbm',
+    'libwayland-client',
+    'libwayland-server',
+  ],
+  yum: [
+    'libxcb',
+    'libX11-xcb',
+    'libX11',
+    'libXext',
+    'libXrandr',
+    'libXcomposite',
+    'libXcursor',
+    'libXdamage',
+    'libXfixes',
+    'libXi',
+    'gtk3',
+    'pango',
+    'atk',
+    'cairo-gobject',
+    'cairo',
+    'gdk-pixbuf2',
+    'libXrender',
+    'alsa-lib',
+    'freetype',
+    'fontconfig',
+    'dbus-libs',
+    'nss',
+    'nspr',
+    'at-spi2-atk',
+    'libdrm',
+    'libxkbcommon',
+    'at-spi2-core',
+    'cups-libs',
+    'libxshmfence',
+    'mesa-libgbm',
+  ],
+};
+
+function detectPackageManager(): 'apt' | 'dnf' | 'yum' | null {
+  const managers = ['apt-get', 'dnf', 'yum'] as const;
+  for (const mgr of managers) {
+    try {
+      execSync(`which ${mgr}`, { stdio: 'ignore' });
+      return mgr === 'apt-get' ? 'apt' : mgr;
+    } catch {
+      // Not found, try next
+    }
+  }
+  return null;
+}
+
+function installSystemDeps(): void {
+  if (os.platform() !== 'linux') {
+    console.log('System dependency installation is only needed on Linux');
+    return;
+  }
+
+  const pkgMgr = detectPackageManager();
+  if (!pkgMgr) {
+    throw new Error('No supported package manager found (apt-get, dnf, or yum)');
+  }
+
+  const deps = LINUX_DEPS[pkgMgr];
+  if (!deps || deps.length === 0) {
+    throw new Error(`No dependencies defined for package manager: ${pkgMgr}`);
+  }
+
+  console.log(`Detected package manager: ${pkgMgr}`);
+  console.log(`Installing ${deps.length} dependencies...`);
+
+  let cmd: string;
+  switch (pkgMgr) {
+    case 'apt':
+      cmd = `apt-get update && apt-get install -y ${deps.join(' ')}`;
+      break;
+    case 'dnf':
+      cmd = `dnf install -y ${deps.join(' ')}`;
+      break;
+    case 'yum':
+      cmd = `yum install -y ${deps.join(' ')}`;
+      break;
+  }
+
+  // Run with sudo if not root
+  const isRoot = process.getuid?.() === 0;
+  if (!isRoot) {
+    cmd = `sudo ${cmd}`;
+  }
+
+  execSync(cmd, { stdio: 'inherit' });
+}
 
 // ============================================================================
 // Utilities
@@ -112,6 +275,7 @@ ${c('yellow', 'Debug:')}
 
 ${c('yellow', 'Setup:')}
   ${c('cyan', 'install')}                    Install browser binaries
+  ${c('cyan', 'install')} --with-deps        Also install system dependencies (Linux)
 
 ${c('yellow', 'Options:')}
   --session <name>    Isolated session (or AGENT_BROWSER_SESSION env)
@@ -951,6 +1115,22 @@ async function main(): Promise<void> {
       }
 
     case 'install': {
+      const withDeps = rawArgs.includes('--with-deps') || rawArgs.includes('-d');
+      
+      // Install system dependencies first if requested
+      if (withDeps) {
+        console.log(c('cyan', 'Installing system dependencies...'));
+        try {
+          installSystemDeps();
+          console.log(c('green', '✓'), 'System dependencies installed');
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(c('red', '✗'), 'Failed to install system dependencies:', msg);
+          process.exit(1);
+        }
+      }
+      
+      // Install browsers
       console.log(c('cyan', 'Installing Playwright browsers...'));
       try {
         execSync('npx playwright install', { stdio: 'inherit' });

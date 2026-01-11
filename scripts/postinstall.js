@@ -7,6 +7,10 @@ const message = `
 ║                                                                           ║
 ║     npx agent-browser install                                             ║
 ║                                                                           ║
+║ On Linux, include system dependencies with:                               ║
+║                                                                           ║
+║     npx agent-browser install --with-deps                                 ║
+║                                                                           ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 `;
 
