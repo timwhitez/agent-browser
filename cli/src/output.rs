@@ -135,7 +135,7 @@ pub fn print_response(resp: &Response, json_mode: bool, action: Option<&str>) {
         // Cleared requests
         if let Some(cleared) = data.get("cleared").and_then(|v| v.as_bool()) {
             if cleared {
-                println!("\x1b[32m✓\x1b[0m Request log cleared");
+                println!("{} Request log cleared", color::success_indicator());
                 return;
             }
         }
@@ -220,21 +220,26 @@ pub fn print_response(resp: &Response, json_mode: bool, action: Option<&str>) {
             }
             return;
         }
+        // Screenshot base64
+        if let Some(base64) = data.get("base64").and_then(|v| v.as_str()) {
+            println!("{}", base64);
+            return;
+        }
         // Path-based operations (screenshot/pdf/trace/har/download/state/video)
         if let Some(path) = data.get("path").and_then(|v| v.as_str()) {
             match action.unwrap_or("") {
-                "screenshot" => println!("\x1b[32m✓\x1b[0m Screenshot saved to {}", path),
-                "pdf" => println!("\x1b[32m✓\x1b[0m PDF saved to {}", path),
-                "trace_stop" => println!("\x1b[32m✓\x1b[0m Trace saved to {}", path),
-                "har_stop" => println!("\x1b[32m✓\x1b[0m HAR saved to {}", path),
-                "download" | "waitfordownload" => println!("\x1b[32m✓\x1b[0m Download saved to {}", path),
-                "video_stop" => println!("\x1b[32m✓\x1b[0m Video saved to {}", path),
-                "state_save" => println!("\x1b[32m✓\x1b[0m State saved to {}", path),
+                "screenshot" => println!("{} Screenshot saved to {}", color::success_indicator(), color::green(path)),
+                "pdf" => println!("{} PDF saved to {}", color::success_indicator(), color::green(path)),
+                "trace_stop" => println!("{} Trace saved to {}", color::success_indicator(), color::green(path)),
+                "har_stop" => println!("{} HAR saved to {}", color::success_indicator(), color::green(path)),
+                "download" | "waitfordownload" => println!("{} Download saved to {}", color::success_indicator(), color::green(path)),
+                "video_stop" => println!("{} Video saved to {}", color::success_indicator(), color::green(path)),
+                "state_save" => println!("{} State saved to {}", color::success_indicator(), color::green(path)),
                 "state_load" => {
                     if let Some(note) = data.get("note").and_then(|v| v.as_str()) {
                         println!("{}", note);
                     }
-                    println!("\x1b[32m✓\x1b[0m State path set to {}", path);
+                    println!("{} State path set to {}", color::success_indicator(), color::green(path));
                 }
                 // video_start and other commands that provide a path with a note
                 "video_start" => {
@@ -243,7 +248,7 @@ pub fn print_response(resp: &Response, json_mode: bool, action: Option<&str>) {
                     }
                     println!("Path: {}", path);
                 }
-                _ => println!("\x1b[32m✓\x1b[0m Saved to {}", path),
+                _ => println!("{} Saved to {}", color::success_indicator(), color::green(path)),
             }
             return;
         }
